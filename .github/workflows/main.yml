@@ -37,7 +37,7 @@ jobs:
         run: |
           git clone --depth 1 --branch ${{ github.event.inputs.target_branch }} ${{ github.event.inputs.target_repo }} target_repo
 
-      - name: Remove target repo contents (keep .git) for clean port
+      - name: Clean target repo directory except .git
         run: |
           cd target_repo
           shopt -s extglob
@@ -45,7 +45,8 @@ jobs:
 
       - name: Copy source files into target repo directory, overwriting
         run: |
-          cp -a ../source_repo/. ./target_repo/
+          cd target_repo
+          cp -a ../source_repo/. .
 
       - name: Zip the combined source code
         run: |
