@@ -1,0 +1,65 @@
+name: Port Commits Between Repos
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: 'Source repo HTTPS URL (e.g., https://github.com/user/source.git)'
+        required: true
+        type: string
+      source_branch:
+        description: 'Source repo branch to port from'
+        required: true
+        default: 'main'
+        type: string
+      target_repo:
+        description: 'Target repo HTTPS URL (e.g., https://github.com/user/target.git)'
+        required: true
+        type: string
+      target_branch:
+        description: 'Target repo branch to port to'
+        required: true
+        default: 'main'
+        type: string
+      commits:
+        description: 'Commit SHAs from source repo to cherry-pick, comma-separated. Use "all" for all commits.'
+        required: true
+        type: string
+
+jobs:
+  port-commits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo }}
+          ref: ${{ github.event.inputs.target_branch }}
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: target
+
+      - name: Add source repo as remote and fetch
+        run: |
+          cd target
+          git remote add source ${{ github.event.inputs.source_repo }}
+          git fetch source
+
+      - name: Cherry-pick commits
+        run: |
+          cd target
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          if [ "${{ github.event.inputs.commits }}" = "all" ]; then
+            git cherry-pick source/${{ github.event.inputs.source_branch }}
+          else
+            IFS=',' read -ra SHAS <<< "${{ github.event.inputs.commits }}"
+            for sha in "${SHAS[@]}"; do
+              git cherry-pick "$sha"
+            done
+          fi
+
+      - name: Push changes
+        run: |
+          cd target
+          git push origin ${{ github.event.inputs.target_branch }}
