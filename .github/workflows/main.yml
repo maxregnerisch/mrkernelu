@@ -46,10 +46,11 @@ jobs:
           git remote add source ../source_repo
           git fetch source
           if [ "${{ github.event.inputs.merge_method }}" = "rebase" ]; then
-            git rebase source/${{ github.event.inputs.source_branch }}
+          git rebase source/${{ github.event.inputs.source_branch }}
           else
-            git merge source/${{ github.event.inputs.source_branch }} --no-ff
+          git merge source/${{ github.event.inputs.source_branch }} --no-ff --allow-unrelated-histories
           fi
+
 
       - name: Zip merged result
         run: |
