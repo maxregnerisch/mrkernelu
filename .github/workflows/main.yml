@@ -1,23 +1,23 @@
-name: Port Kernel and Upload Zip Artifact
+name: Port Kernel Commits and Upload Zip Artifact
 
 on:
   workflow_dispatch:
     inputs:
       source_repo:
-        description: 'Source repo HTTPS URL'
+        description: 'Source repo HTTPS URL (e.g., https://github.com/user/source.git)'
         required: true
         type: string
       source_branch:
-        description: 'Source repo branch'
+        description: 'Source repo branch to port from'
         required: false
         default: 'main'
         type: string
       target_repo:
-        description: 'Target repo HTTPS URL'
+        description: 'Target repo HTTPS URL (e.g., https://github.com/user/target.git)'
         required: true
         type: string
       target_branch:
-        description: 'Target repo branch'
+        description: 'Target repo branch to port to'
         required: false
         default: 'main'
         type: string
@@ -28,37 +28,53 @@ on:
         type: string
 
 jobs:
-  port-and-zip:
+  port-and-package:
     runs-on: ubuntu-latest
+    env:
+      ZIP_OUTPUT: kernel_ported.zip
 
     steps:
-      - name: Clone source repo
+      - name: Checkout source repo (shallow clone for speed)
         run: |
-          git clone --branch ${{ github.event.inputs.source_branch }} ${{ github.event.inputs.source_repo }} source_repo
+          git clone --depth 1 --branch ${{ github.event.inputs.source_branch }} ${{ github.event.inputs.source_repo }} source_repo
 
-      - name: Clone target repo
+      - name: Checkout target repo (shallow clone for speed)
         run: |
-          git clone --branch ${{ github.event.inputs.target_branch }} ${{ github.event.inputs.target_repo }} target_repo
+          git clone --depth 1 --branch ${{ github.event.inputs.target_branch }} ${{ github.event.inputs.target_repo }} target_repo
 
-      - name: Merge or rebase source into target
+      - name: Configure git user
+        run: |
+          cd target_repo
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Add source repo remote and fetch commits
         run: |
           cd target_repo
           git remote add source ../source_repo
           git fetch source
-          if [ "${{ github.event.inputs.merge_method }}" = "rebase" ]; then
-          git rebase source/${{ github.event.inputs.source_branch }}
-          else
-          git merge source/${{ github.event.inputs.source_branch }} --no-ff --allow-unrelated-histories
-          fi
 
-
-      - name: Zip merged result
+      - name: Merge or rebase source branch into target
         run: |
           cd target_repo
-          zip -r ../kernel_ported.zip . 
+          if [ "${{ github.event.inputs.merge_method }}" = "rebase" ]; then
+            git rebase source/${{ github.event.inputs.source_branch }}
+          else
+            git merge source/${{ github.event.inputs.source_branch }} --no-ff --allow-unrelated-histories
+          fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Clean up git metadata for artifact
+        run: |
+          cd target_repo
+          rm -rf .git
+
+      - name: Zip merged kernel source
+        run: |
+          cd target_repo
+          zip -r ../${ZIP_OUTPUT} .
+
+      - name: Upload ported kernel artifact
+        uses: actions/upload-artifact@v3
         with:
           name: ported-kernel-zip
-          path: kernel_ported.zip
+          path: ${{ env.ZIP_OUTPUT }}
