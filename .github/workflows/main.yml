@@ -1,30 +1,25 @@
-name: Port Kernel Commits and Upload Zip Artifact
+name: Port Kernel Using Git Clone and Unix Tools
 
 on:
   workflow_dispatch:
     inputs:
       source_repo:
-        description: 'Source repo HTTPS URL (e.g., https://github.com/user/source.git)'
+        description: 'Source repo HTTPS URL'
         required: true
         type: string
       source_branch:
-        description: 'Source repo branch to port from'
+        description: 'Source branch'
         required: false
         default: 'main'
         type: string
       target_repo:
-        description: 'Target repo HTTPS URL (e.g., https://github.com/user/target.git)'
+        description: 'Target repo HTTPS URL'
         required: true
         type: string
       target_branch:
-        description: 'Target repo branch to port to'
+        description: 'Target branch'
         required: false
         default: 'main'
-        type: string
-      merge_method:
-        description: 'Merge method (merge or rebase)'
-        required: false
-        default: 'merge'
         type: string
 
 jobs:
@@ -34,46 +29,30 @@ jobs:
       ZIP_OUTPUT: kernel_ported.zip
 
     steps:
-      - name: Checkout source repo (shallow clone for speed)
+      - name: Clone source repo only
         run: |
           git clone --depth 1 --branch ${{ github.event.inputs.source_branch }} ${{ github.event.inputs.source_repo }} source_repo
 
-      - name: Checkout target repo (shallow clone for speed)
+      - name: Clone target repo only
         run: |
           git clone --depth 1 --branch ${{ github.event.inputs.target_branch }} ${{ github.event.inputs.target_repo }} target_repo
 
-      - name: Configure git user
+      - name: Remove target repo contents (keep .git) for clean port
         run: |
           cd target_repo
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          shopt -s extglob
+          rm -rf !( .git )
 
-      - name: Add source repo remote and fetch commits
+      - name: Copy source files into target repo directory, overwriting
         run: |
-          cd target_repo
-          git remote add source ../source_repo
-          git fetch source
+          cp -a ../source_repo/. ./target_repo/
 
-      - name: Merge or rebase source branch into target
-        run: |
-          cd target_repo
-          if [ "${{ github.event.inputs.merge_method }}" = "rebase" ]; then
-            git rebase source/${{ github.event.inputs.source_branch }}
-          else
-            git merge source/${{ github.event.inputs.source_branch }} --no-ff --allow-unrelated-histories
-          fi
-
-      - name: Clean up git metadata for artifact
-        run: |
-          cd target_repo
-          rm -rf .git
-
-      - name: Zip merged kernel source
+      - name: Zip the combined source code
         run: |
           cd target_repo
           zip -r ../${ZIP_OUTPUT} .
 
-      - name: Upload ported kernel artifact
+      - name: Upload zipped artifact
         uses: actions/upload-artifact@v4
         with:
           name: ported-kernel-zip
