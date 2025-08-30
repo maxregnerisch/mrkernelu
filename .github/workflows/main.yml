@@ -1,65 +1,63 @@
-name: Port Commits Between Repos
+name: Port Kernel and Upload Zip Artifact
 
 on:
   workflow_dispatch:
     inputs:
       source_repo:
-        description: 'Source repo HTTPS URL (e.g., https://github.com/user/source.git)'
+        description: 'Source repo HTTPS URL'
         required: true
         type: string
       source_branch:
-        description: 'Source repo branch to port from'
-        required: true
+        description: 'Source repo branch'
+        required: false
         default: 'main'
         type: string
       target_repo:
-        description: 'Target repo HTTPS URL (e.g., https://github.com/user/target.git)'
+        description: 'Target repo HTTPS URL'
         required: true
         type: string
       target_branch:
-        description: 'Target repo branch to port to'
-        required: true
+        description: 'Target repo branch'
+        required: false
         default: 'main'
         type: string
-      commits:
-        description: 'Commit SHAs from source repo to cherry-pick, comma-separated. Use "all" for all commits.'
-        required: true
+      merge_method:
+        description: 'Merge method (merge or rebase)'
+        required: false
+        default: 'merge'
         type: string
 
 jobs:
-  port-commits:
+  port-and-zip:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout target repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.inputs.target_repo }}
-          ref: ${{ github.event.inputs.target_branch }}
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          path: target
-
-      - name: Add source repo as remote and fetch
+      - name: Clone source repo
         run: |
-          cd target
-          git remote add source ${{ github.event.inputs.source_repo }}
+          git clone --branch ${{ github.event.inputs.source_branch }} ${{ github.event.inputs.source_repo }} source_repo
+
+      - name: Clone target repo
+        run: |
+          git clone --branch ${{ github.event.inputs.target_branch }} ${{ github.event.inputs.target_repo }} target_repo
+
+      - name: Merge or rebase source into target
+        run: |
+          cd target_repo
+          git remote add source ../source_repo
           git fetch source
-
-      - name: Cherry-pick commits
-        run: |
-          cd target
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          if [ "${{ github.event.inputs.commits }}" = "all" ]; then
-            git cherry-pick source/${{ github.event.inputs.source_branch }}
+          if [ "${{ github.event.inputs.merge_method }}" = "rebase" ]; then
+            git rebase source/${{ github.event.inputs.source_branch }}
           else
-            IFS=',' read -ra SHAS <<< "${{ github.event.inputs.commits }}"
-            for sha in "${SHAS[@]}"; do
-              git cherry-pick "$sha"
-            done
+            git merge source/${{ github.event.inputs.source_branch }} --no-ff
           fi
 
-      - name: Push changes
+      - name: Zip merged result
         run: |
-          cd target
-          git push origin ${{ github.event.inputs.target_branch }}
+          cd target_repo
+          zip -r ../kernel_ported.zip . 
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ported-kernel-zip
+          path: kernel_ported.zip
