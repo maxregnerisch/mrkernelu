@@ -57,7 +57,7 @@ jobs:
           zip -r ../kernel_ported.zip . 
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ported-kernel-zip
           path: kernel_ported.zip
